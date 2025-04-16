@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天地图加载GeoJSON数据</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .leaflet-bottom{
+            display: none;
+        }
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #777;
+        }
+        .custom-popup .leaflet-popup-content {
+            max-width: 280px;
+            padding: 0;
+            margin: 0;
+        }
+        .custom-popup .leaflet-popup-content-wrapper {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.3);
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        /* 移除弹窗特殊箭头位置设置，使用默认箭头 */
+        .custom-popup .leaflet-popup-tip {
+            background-color: #fff;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.3);
+        }
+        
+        /* POI卡片样式 */
+        .poi-card {
+            width: 100%;
+        }
+        
+        /* POI卡片标题栏 */
+        .poi-header {
+            background-color: #f8f8f8;
+            color: #333;
+            padding: 12px 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid #eee;
+        }
+        
+        /* POI卡片内容区 */
+        .poi-content {
+            padding: 15px;
+        }
+        
+        /* POI部分标题 */
+        .poi-section {
+            margin-bottom: 12px;
+        }
+        
+        .poi-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .poi-section-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        
+        /* POI文本内容，可滚动 */
+        .poi-text {
+            max-height: 100px;
+            overflow-y: auto;
+            line-height: 1.4;
+            padding-right: 5px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* 自定义滚动条样式 */
+        .poi-text::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .poi-text::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 2px;
+        }
+        
+        .poi-text::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 2px;
+        }
+        
+        .poi-text::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        
+        /* 自定义标记样式 */
+        .label-marker {
+            position: relative;
+            width: 30px;  /* 稍微宽一点 */
+            min-height: 80px; /* 增加最小高度 */
+            height: auto; /* 高度根据文字长度自适应 */
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 5px 0;
+            border-radius: 3px;
+            text-align: center;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.4);
+            cursor: pointer;
+            /* 关键：使得文字竖直排列 */
+            /* writing-mode: vertical-rl;
+            text-orientation: upright; 
+            letter-spacing: 4px; */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* 标记底部的三角形指示器 - 使用伪元素和border实现 */
+        .marker-triangle {
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+        }
+        
+        /* 自定义聚合样式 */
+        .marker-cluster {
+            background-color: rgba(66, 133, 244, 0.6);
+        }
+        .marker-cluster div {
+            background-color: rgba(66, 133, 244, 0.8);
+            color: white;
+            font-weight: bold;
+        }
+        
+        /* 模态弹窗背景 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* 中央弹窗样式 */
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 350px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            transform: translateY(-20px);
+            transition: transform 0.3s;
+            overflow: hidden;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        
+        /* 关闭按钮 */
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.1);
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+    </style>
+    <!-- 引入Leaflet库 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    
+    <!-- 引入Leaflet.markercluster插件 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        /**
+         * 坐标转换工具
+         * 支持百度坐标系(BD-09)转WGS84坐标系
+         * 天地图使用的是CGCS2000坐标系，可以与WGS84坐标共用
+         * 参考：https://blog.csdn.net/qq_26708777/article/details/52807873
+         */
+        const CoordTransform = {
+            // 坐标系参数
+            X_PI: 3.14159265358979324 * 3000.0 / 180.0,
+            PI: 3.1415926535897932384626,
+            A: 6378245.0,
+            EE: 0.00669342162296594323,
+            
+            /**
+             * 百度坐标系(BD-09)转国测局坐标系(GCJ-02)
+             * @param {Number} lng - 百度坐标经度
+             * @param {Number} lat - 百度坐标纬度
+             * @returns {Array} 返回GCJ-02坐标数组[经度,纬度]
+             */
+            bd09ToGcj02: function(lng, lat) {
+                // 检查坐标有效性
+                if (isNaN(lng) || isNaN(lat)) {
+                    console.error('无效的坐标:', lng, lat);
+                    return [lng, lat]; // 返回原坐标，避免错误
+                }
+                
+                try {
+                    const x = lng - 0.0065;
+                    const y = lat - 0.006;
+                    const z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * this.X_PI);
+                    const theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * this.X_PI);
+                    const gcjLng = z * Math.cos(theta);
+                    const gcjLat = z * Math.sin(theta);
+                    
+                    return [gcjLng, gcjLat];
+                } catch (e) {
+                    console.error('坐标转换出错:', e);
+                    return [lng, lat]; // 出错时返回原坐标
+                }
+            },
+            
+            /**
+             * 国测局坐标系(GCJ-02)转WGS84坐标系
+             * @param {Number} lng - GCJ-02坐标经度
+             * @param {Number} lat - GCJ-02坐标纬度
+             * @returns {Array} 返回WGS84坐标数组[经度,纬度]
+             */
+            gcj02ToWGS84: function(lng, lat) {
+                if (this.outOfChina(lng, lat)) {
+                    return [lng, lat];
+                }
+                
+                let dlat = this.transformLat(lng - 105.0, lat - 35.0);
+                let dlng = this.transformLng(lng - 105.0, lat - 35.0);
+                const radlat = lat / 180.0 * this.PI;
+                let magic = Math.sin(radlat);
+                magic = 1 - this.EE * magic * magic;
+                const sqrtmagic = Math.sqrt(magic);
+                dlat = (dlat * 180.0) / ((this.A * (1 - this.EE)) / (magic * sqrtmagic) * this.PI);
+                dlng = (dlng * 180.0) / (this.A / sqrtmagic * Math.cos(radlat) * this.PI);
+                const mglat = lat + dlat;
+                const mglng = lng + dlng;
+                return [lng * 2 - mglng, lat * 2 - mglat];
+            },
+            
+            /**
+             * 百度坐标系(BD-09)转WGS84坐标系，两步转换
+             * @param {Number} lng - 百度坐标经度
+             * @param {Number} lat - 百度坐标纬度
+             * @returns {Array} 返回WGS84坐标数组[经度,纬度]
+             */
+            bd09ToWGS84: function(lng, lat) {
+                // 检查坐标有效性
+                if (isNaN(lng) || isNaN(lat)) {
+                    console.error('无效的坐标:', lng, lat);
+                    return [lng, lat]; // 返回原坐标，避免错误
+                }
+                
+                try {
+                    // 先将百度坐标转为GCJ-02
+                    const gcj = this.bd09ToGcj02(lng, lat);
+                    // 再将GCJ-02转为WGS84
+                    return this.gcj02ToWGS84(gcj[0], gcj[1]);
+                } catch (e) {
+                    console.error('坐标转换出错:', e);
+                    return [lng, lat]; // 出错时返回原坐标
+                }
+            },
+            
+            /**
+             * 判断坐标是否在中国境外
+             * @param {Number} lng - 经度
+             * @param {Number} lat - 纬度
+             * @returns {Boolean} - 是否在中国境外
+             */
+            outOfChina: function(lng, lat) {
+                if (lng < 72.004 || lng > 137.8347) {
+                    return true;
+                }
+                if (lat < 0.8293 || lat > 55.8271) {
+                    return true;
+                }
+                return false;
+            },
+            
+            /**
+             * 经度转换
+             */
+            transformLng: function(lng, lat) {
+                let ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * Math.sqrt(Math.abs(lng));
+                ret += (20.0 * Math.sin(6.0 * lng * this.PI) + 20.0 * Math.sin(2.0 * lng * this.PI)) * 2.0 / 3.0;
+                ret += (20.0 * Math.sin(lng * this.PI) + 40.0 * Math.sin(lng / 3.0 * this.PI)) * 2.0 / 3.0;
+                ret += (150.0 * Math.sin(lng / 12.0 * this.PI) + 300.0 * Math.sin(lng / 30.0 * this.PI)) * 2.0 / 3.0;
+                return ret;
+            },
+            
+            /**
+             * 纬度转换
+             */
+            transformLat: function(lng, lat) {
+                let ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
+                ret += (20.0 * Math.sin(6.0 * lng * this.PI) + 20.0 * Math.sin(2.0 * lng * this.PI)) * 2.0 / 3.0;
+                ret += (20.0 * Math.sin(lat * this.PI) + 40.0 * Math.sin(lat / 3.0 * this.PI)) * 2.0 / 3.0;
+                ret += (160.0 * Math.sin(lat / 12.0 * this.PI) + 320.0 * Math.sin(lat * this.PI / 30.0)) * 2.0 / 3.0;
+                return ret;
+            }
+        };
+
+        // 初始化地图
+        const map = L.map('map', {
+            center: [31.26, 118.43], // 设置地图中心点（根据GeoJSON数据设置）
+            zoom: 13,  // 设置缩放级别
+            zoomControl: false // 禁用缩放控制按钮
+        });
+
+        // 请替换YOUR_TIANDITU_KEY为您的天地图密钥
+        const tiandituKey = '1c2a0e864468f9415f9617f2dfeb5c0b';
+
+        // 添加天地图矢量底图
+        const vec = L.tileLayer(`https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`, {
+            subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+            maxZoom: 18
+        });
+
+        // 添加天地图矢量注记
+        const cva = L.tileLayer(`https://t{s}.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`, {
+            subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+            maxZoom: 18
+        });
+
+        // 添加天地图影像底图
+        const img = L.tileLayer(`https://t{s}.tianditu.gov.cn/img_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=img&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`, {
+            subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+            maxZoom: 18
+        });
+
+        // 添加天地图影像注记
+        const cia = L.tileLayer(`https://t{s}.tianditu.gov.cn/cia_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cia&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`, {
+            subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+            maxZoom: 18
+        });
+
+        // 添加天地图地形底图
+        const ter = L.tileLayer(`https://t{s}.tianditu.gov.cn/ter_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ter&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`, {
+            subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+            maxZoom: 18
+        });
+
+        // 添加天地图地形注记
+        const cta = L.tileLayer(`https://t{s}.tianditu.gov.cn/cta_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cta&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`, {
+            subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+            maxZoom: 18
+        });
+
+        // 创建图层组
+        const vecMap = L.layerGroup([vec, cva]);
+        const imgMap = L.layerGroup([img, cia]);
+        const terMap = L.layerGroup([ter, cta]);
+
+        // 默认加载影像地图
+        imgMap.addTo(map);
+
+        // 定义GeoJSON样式
+        const geoJsonStyle = {
+            color: '#ff0000',     // 边界线颜色
+            weight: 2,            // 边界线宽度
+            opacity: 1,           // 边界线透明度
+            fillColor: '#ff7800', // 填充颜色
+            fillOpacity: 0.2      // 填充透明度
+        };
+
+        // 创建POI标记的图层组 - 使用聚合图层代替普通图层
+        const poiLayerGroup = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            chunkedLoading: true,
+            maxClusterRadius: 5, // 默认80，设置较小值减少聚合
+            disableClusteringAtZoom: 18, // 最大缩放级别时不聚合
+            spiderfyOnMaxZoom: true, // 在最大缩放级别时展开聚合点
+            iconCreateFunction: function(cluster) {
+                // 自定义聚合图标样式
+                const count = cluster.getChildCount();
+                return L.divIcon({
+                    html: `<div><span>${count}</span></div>`,
+                    className: 'marker-cluster',
+                    iconSize: L.point(40, 40)
+                });
+            }
+        }).addTo(map);
+
+        // 颜色列表，用于标记
+        const colorList = [
+            '#4285F4', // 蓝色
+            '#EA4335', // 红色
+            '#FBBC05', // 黄色
+            '#34A853', // 绿色
+            '#FF6D01', // 橙色
+            '#46BDC6', // 青色
+            '#7B0099', // 紫色
+            '#B31014', // 深红色
+            '#299438', // 深绿色
+            '#01579B'  // 深蓝色
+        ];
+
+        // 加载GeoJSON数据
+        let geoJsonLayer;
+        
+        // 创建中央弹窗元素
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-close">&times;</div>
+                <div id="modal-poi-content"></div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // 关闭弹窗事件
+        document.querySelector('.modal-close').addEventListener('click', function() {
+            modalOverlay.classList.remove('active');
+        });
+        
+        // 点击背景关闭弹窗
+        modalOverlay.addEventListener('click', function(e) {
+            if (e.target === modalOverlay) {
+                modalOverlay.classList.remove('active');
+            }
+        });
+        
+        // 显示POI信息的函数
+        function showPOIModal(poi) {
+            const modalContent = document.getElementById('modal-poi-content');
+            modalContent.innerHTML = `
+                <div class="poi-card">
+                    <div class="poi-header">${poi.name}</div>
+                    <div class="poi-content">
+                        <div class="poi-section">
+                            <div class="poi-section-title">描述</div>
+                            <div class="poi-text">${poi.description}</div>
+                        </div>
+                        <div class="poi-section">
+                            <div class="poi-section-title">特色</div>
+                            <div class="poi-text">${poi.characteristic}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            modalOverlay.classList.add('active');
+        }
+        
+        fetch('火龙街道_shape.json')
+            .then(response => response.json())
+            .then(data => {
+                // 设置GeoJSON样式
+                geoJsonLayer = L.geoJSON(data, {
+                    style: geoJsonStyle,
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties && feature.properties.name) {
+                            layer.bindPopup(feature.properties.name);
+                        }
+                    }
+                }).addTo(map);
+
+                // 缩放地图以适应GeoJSON数据
+                const bounds = geoJsonLayer.getBounds();
+                map.fitBounds(bounds);
+                
+                // 设置地图最大边界为火龙街道区域，稍微扩大一点点以便更好的视觉效果
+                const paddingFactor = 0.1; // 10%的边界扩展
+                const expandedBounds = bounds.pad(paddingFactor);
+                map.setMaxBounds(expandedBounds);
+                
+                // 设置最小和最大缩放级别
+                const currentZoom = map.getZoom();
+                map.setMinZoom(currentZoom - 1); // 允许再缩小一级
+                map.setMaxZoom(18); // 天地图支持的最大缩放级别
+                
+                // 限制用户只能在最大边界内平移
+                map.on('drag', function() {
+                    map.panInsideBounds(expandedBounds, { animate: false });
+                });
+
+                // 加载POI数据
+                loadPOIData();
+            })
+            .catch(error => console.error('加载GeoJSON数据失败:', error));
+        
+        /**
+         * 加载POI数据并进行坐标转换
+         * poi.json文件中的坐标使用百度坐标系(BD-09)
+         * 转换为WGS84坐标系，天地图支持直接使用WGS84坐标
+         */
+        function loadPOIData() {
+            fetch('poi.json')
+                .then(response => response.json())
+                .then(data => {
+                    // 清空现有的POI标记
+                    poiLayerGroup.clearLayers();
+
+                    // 创建临时图层用于一次性添加所有标记，提高性能
+                    const tempMarkers = [];
+
+                    // 遍历POI数据并创建标记
+                    data.pois.forEach((poi, index) => {
+                        try {
+                            const coordinates = poi.coordinate.split(',');
+                            // poi.json中坐标格式为 "经度,纬度"
+                            const bdLng = parseFloat(coordinates[0]);
+                            const bdLat = parseFloat(coordinates[1]);
+                            
+                            
+                            // 将百度坐标转换为WGS84坐标系
+                            const wgsCoord = CoordTransform.bd09ToWGS84(bdLng, bdLat);
+                            const wgsLng = wgsCoord[0];
+                            const wgsLat = wgsCoord[1];
+                            
+                            // 获取颜色（循环使用颜色列表）
+                            const color = colorList[index % colorList.length];
+                            
+                            // 估算标记的高度 - 文字长度 × 字体大小 + 上下内边距
+                            // 这是为了计算iconAnchor使三角形指向正确的位置
+                            const estimatedHeight = poi.name.length * 25 + 20; // 估算高度：每个字符约20px高+内边距
+                            
+                            // 使用自定义HTML创建标记
+                            const customIcon = L.divIcon({
+                                className: '',
+                                html: `
+                                    <div class="label-marker" style="background-color: ${color};">
+                                        ${poi.name}
+                                        <div class="marker-triangle" style="border-top: 10px solid ${color};"></div>
+                                    </div>
+                                `,
+                                iconSize: [30, null],  // 固定宽度，高度自适应
+                                iconAnchor: [15, estimatedHeight + 10]   // 锚点设置为标记底部(标记高度+三角形高度)
+                            });
+                            
+                            // 创建标记 - Leaflet使用[纬度,经度]的顺序创建标记
+                            const marker = L.marker([wgsLat, wgsLng], {
+                                icon: customIcon,
+                                title: poi.name
+                            });
+                            
+                            // 点击标记时在屏幕中央打开弹窗
+                            marker.on('click', function() {
+                                showPOIModal(poi);
+                            });
+                            
+                            // 将标记添加到临时数组
+                            tempMarkers.push(marker);
+                        } catch (e) {
+                            console.error(`处理POI(${poi.name})时出错:`, e);
+                        }
+                    });
+                    
+                    // 批量添加所有标记到聚合图层
+                    poiLayerGroup.addLayers(tempMarkers);
+                })
+                .catch(error => console.error('加载POI数据失败:', error));
+        }
+    </script>
+</body>
+</html> 
