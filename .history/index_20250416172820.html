@@ -115,13 +115,13 @@
         /* 自定义标记样式 */
         .label-marker {
             position: relative;
-            width: 30px;  /* 稍微宽一点 */
+            width: 20px;  /* 稍微宽一点 */
             min-height: 80px; /* 增加最小高度 */
             height: auto; /* 高度根据文字长度自适应 */
             color: white;
             font-weight: bold;
-            font-size: 16px;
-            padding: 5px 0;
+            font-size: 14px;
+            padding: 5px;
             border-radius: 3px;
             text-align: center;
             box-shadow: 2px 2px 5px rgba(0,0,0,0.4);
@@ -361,7 +361,7 @@
         const map = L.map('map', {
             center: [31.26, 118.43], // 设置地图中心点（根据GeoJSON数据设置）
             zoom: 13,  // 设置缩放级别
-            minZoom: 3, // 设置最小缩放级别
+            minZoom: 13, // 设置最小缩放级别
             zoomControl: false // 禁用缩放控制按钮
         });
 
